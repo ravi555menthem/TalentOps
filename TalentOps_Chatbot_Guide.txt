@@ -1,0 +1,26 @@
+TALENTOPS CHATBOT: CAPABILITIES & ROLE GUIDE
+
+1. SYSTEM OVERVIEW
+The chatbot is a Role-Aware AI Assistant synchronized with the production database.
+
+2. ROLE-BASED ACTION MATRIX
+FEATURE                   EMPLOYEE     TEAM LEAD     MANAGER     EXECUTIVE
+Attendance (In/Out)         YES          YES           YES         YES
+View Own Tasks              YES          YES           YES         YES
+Apply for Leave             YES          YES           YES         YES
+View Team Attendance        NO           YES           YES         YES
+View Team Tasks/Leaves      NO           YES           YES         YES
+Approve/Reject Leaves       NO           REDIRECT      YES         YES
+Assign Tasks                NO           NO            YES         YES
+System Announcements        NO           NO            NO          YES
+
+3. DETAILED ACTION LIBRARY
+- Attendance & Timesheets: clock_in, clock_out, get_attendance.
+- Task Management: create_task, view_my_tasks.
+- Leave Management: apply_leave, approve/reject_leave.
+- Announcements: Syncs automatically with Dashboard Calendar.
+
+4. HOW TO TEST
+1. Run START_SERVERS.bat.
+2. Login to your dashboard.
+3. Ask chatbot to perform actions!
