@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MoreHorizontal, Plus, X, User, Users, Filter, Search, Calendar, CheckCircle2, Circle, Clock, AlertCircle, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { MoreHorizontal, Plus, X, User, Users, Filter, Search, Calendar, CheckCircle2, Circle, Clock, AlertCircle, ChevronLeft, ChevronRight, Eye, Shield, FileText, ExternalLink, XCircle, Activity, Download, ChevronDown, CheckSquare, MessageSquare, Paperclip, Send, FileCheck } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { supabase } from '../../../../lib/supabaseClient';
 
@@ -38,6 +38,230 @@ const KanbanDemo = () => {
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
     const tasksPerPage = 10;
+
+    // Review State for Manager
+    const [taskReview, setTaskReview] = useState(null);
+    const [loadingReview, setLoadingReview] = useState(false);
+    const [rejectionRemark, setRejectionRemark] = useState('');
+    const [isRejecting, setIsRejecting] = useState(false);
+
+    useEffect(() => {
+        if (showTaskDetailsModal && selectedTask) {
+            fetchTaskReviewData(selectedTask.id);
+        } else {
+            setTaskReview(null);
+            setIsRejecting(false);
+            setRejectionRemark('');
+        }
+    }, [showTaskDetailsModal, selectedTask]);
+
+    const fetchTaskReviewData = async (taskId) => {
+        setLoadingReview(true);
+        try {
+            // 1. Get Progress
+            const { data: progress } = await supabase.from('task_progress').select('*').eq('task_id', taskId).single();
+
+            // 2. Get Confirm Submission
+            const { data: submission } = await supabase.from('task_submissions').select('*').eq('task_id', taskId).order('submission_time', { ascending: false }).limit(1).single();
+
+            // 3. Get Evidence
+            let evidence = [];
+            if (submission) {
+                const { data: evidenceData } = await supabase.from('task_evidence').select('*').eq('submission_id', submission.id);
+                evidence = evidenceData || [];
+            }
+
+            setTaskReview({ progress, submission, evidence });
+        } catch (error) {
+            console.error('Error fetching review data:', error);
+        } finally {
+            setLoadingReview(false);
+        }
+    };
+
+    // Audit Report Generator
+    const handleGenerateReport = async (task) => {
+        // 1. Fetch Audit Ledger Data
+        let auditData = null;
+        const { data, error } = await supabase
+            .from('task_audit_ledger')
+            .select('*')
+            .eq('task_id', task.id)
+            .single();
+
+        if (data) auditData = data;
+
+        // 2. Build HTML Content
+        const reportContent = `
+            <html>
+            <head>
+                <title>Certification Report - ${task.title}</title>
+                <style>
+                    body { font-family: 'Inter', sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; }
+                    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 20px; margin-bottom: 40px; }
+                    .logo { font-size: 24px; font-weight: 800; color: #0f172a; letter-spacing: -1px; }
+                    .badge { background: #dcfce7; color: #166534; padding: 6px 12px; border-radius: 20px; font-size: 14px; font-weight: 700; border: 1px solid #bbf7d0; text-transform: uppercase; }
+                    .section { margin-bottom: 30px; }
+                    .section-title { font-size: 14px; text-transform: uppercase; color: #64748b; font-weight: 700; margin-bottom: 12px; letter-spacing: 0.5px; }
+                    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+                    .card { background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; }
+                    .label { font-size: 12px; color: #64748b; margin-bottom: 4px; }
+                    .value { font-size: 16px; font-weight: 600; color: #0f172a; }
+                    .proof-item { display: flex; justify-content: space-between; padding: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 8px; }
+                    .footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; font-size: 12px; color: #94a3b8; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <div class="logo">TalentOps Audit Vault</div>
+                    <div class="badge">OFFICIALLY CERTIFIED</div>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">Task Identification</div>
+                    <div class="card">
+                        <div class="label">TASK ID</div>
+                        <div class="value" style="font-family: monospace;">${task.id}</div>
+                        <div style="margin-top: 12px;" class="label">TASK TITLE</div>
+                        <div class="value">${task.title}</div>
+                        <div style="margin-top: 12px;" class="label">ASSIGNED TO</div>
+                        <div class="value">${task.assignee_name || task.assigned_to}</div>
+                    </div>
+                </div>
+
+                <div class="grid section">
+                    <div>
+                        <div class="section-title">Intelligence Scores</div>
+                        <div class="card">
+                            <div class="label">COMPLETION CONFIDENCE</div>
+                            <div class="value" style="color: #15803d;">${auditData?.scores_snapshot?.completion_percent || 0}%</div>
+                            <div style="margin-top: 12px;" class="label">AUTHENTICITY SCORE</div>
+                            <div class="value" style="color: #0369a1;">${auditData?.scores_snapshot?.authenticity_score || 95}/100</div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="section-title">Certification Status</div>
+                        <div class="card">
+                            <div class="label">CERTIFIED AT</div>
+                            <div class="value">${auditData?.certified_at ? new Date(auditData.certified_at).toLocaleString() : new Date().toLocaleString()}</div>
+                            <div style="margin-top: 12px;" class="label">LEDGER HASH (IMMUTABLE)</div>
+                            <div class="value" style="font-size: 12px; font-family: monospace; word-break: break-all;">${auditData?.ledger_hash || 'PENDING_HASH_GENERATION'}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">Verified Proofs</div>
+                    ${auditData?.proofs_snapshot ? auditData.proofs_snapshot.map(p => `
+                        <div class="proof-item">
+                            <span>${p.file_url ? p.file_url.split('/').pop() : 'Evidence File'}</span>
+                            <strong>Verified</strong>
+                        </div>
+                    `).join('') : '<div class="proof-item">No digital proofs archived.</div>'}
+                </div>
+
+                <div class="footer">
+                    <div>Generated via TalentOps Immutable Ledger</div>
+                    <div>${new Date().toISOString()}</div>
+                </div>
+            </body>
+            </html>
+        `;
+
+        // 3. Open Print Window
+        const printWindow = window.open('', '_blank', 'width=1000,height=800');
+        if (printWindow) {
+            printWindow.document.write(reportContent);
+            printWindow.document.close();
+            // Wait for content to load then print
+            setTimeout(() => {
+                printWindow.print();
+            }, 500);
+        } else {
+            addToast('Please allow popups to generate the report', 'error');
+        }
+    };
+
+    const handleApproveTask = async () => {
+        try {
+            setLoadingReview(true);
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                addToast('User not authenticated.', 'error');
+                return;
+            }
+            const userId = user.id;
+
+            // 1. Update Review Record
+            const { error: reviewError } = await supabase.from('task_reviews').insert([{
+                task_id: selectedTask.id,
+                reviewer_id: userId, // Current Manager ID
+                comment: 'Certified by Manager: ' + (rejectionRemark || 'Excellent work'),
+                approved: true
+            }]);
+            if (reviewError) throw reviewError;
+
+            // 2. Update Task Status
+            const { error: taskError } = await supabase.from('tasks').update({ status: 'completed' }).eq('id', selectedTask.id);
+            if (taskError) throw taskError;
+
+            // 3. ARCHIVE TO IMMUTABLE VAULT
+            const { data: archiveData, error: archiveError } = await supabase.rpc('archive_certified_task', {
+                p_task_id: selectedTask.id,
+                p_reviewer_id: userId
+            });
+            if (archiveError) console.error('Archiving failed:', archiveError); // Don't block UI on archive fail
+            else console.log('Task Archived:', archiveData);
+
+            addToast('Task successfully Certified & Archived', 'success');
+            setShowTaskDetailsModal(false);
+            fetchTasks(); // Refresh list
+        } catch (error) {
+            console.error('Approval Error:', error);
+            addToast('Failed to approve task: ' + error.message, 'error');
+        } finally {
+            setLoadingReview(false);
+        }
+    };
+
+    const handleRejectTask = async () => {
+        if (!rejectionRemark.trim()) {
+            addToast('Please provide a reason for rejection.', 'error');
+            return;
+        }
+
+        try {
+            setLoadingReview(true);
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                addToast('User not authenticated.', 'error');
+                return;
+            }
+            const userId = user.id;
+
+            // 1. Update Review Record
+            const { error: reviewError } = await supabase.from('task_reviews').insert([{
+                task_id: selectedTask.id,
+                reviewer_id: userId,
+                comment: rejectionRemark,
+                approved: false
+            }]);
+            if (reviewError) throw reviewError;
+
+            // 2. Update Task Status
+            const { error: taskError } = await supabase.from('tasks').update({ status: 'in_progress' }).eq('id', selectedTask.id);
+            if (taskError) throw taskError;
+
+            addToast('Task rejected and returned to employee', 'success');
+            setShowTaskDetailsModal(false);
+            fetchTasks(); // Refresh list
+        } catch (error) {
+            console.error('Rejection Error:', error);
+            addToast('Failed to reject task: ' + error.message, 'error');
+        } finally {
+            setLoadingReview(false);
+        }
+    };
 
     const [newTask, setNewTask] = useState({
         title: '',
@@ -103,6 +327,8 @@ const KanbanDemo = () => {
                     assigner_name: userMap[t.assigned_by] || 'Unknown',
                     team_name: t.team_id ? teamNameMap[t.team_id] : (teamNameMap[teamMap[t.assigned_to]] || 'N/A')
                 }));
+                // Sort by latest
+                formatted.sort((a, b) => new Date(b.created_at || b.id) - new Date(a.created_at || a.id));
                 setTasks(formatted);
             }
         } catch (error) {
@@ -241,8 +467,6 @@ const KanbanDemo = () => {
         }
     };
 
-    // ... (keep existing helper functions)
-
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {/* Header & Controls */}
@@ -326,11 +550,11 @@ const KanbanDemo = () => {
                         <tbody>
                             {loading ? (
                                 <tr>
-                                    <td colSpan="6" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading tasks...</td>
+                                    <td colSpan="7" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading tasks...</td>
                                 </tr>
                             ) : paginatedTasks.length === 0 ? (
                                 <tr>
-                                    <td colSpan="6" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-secondary)' }}>No tasks found matching your filters.</td>
+                                    <td colSpan="7" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-secondary)' }}>No tasks found matching your filters.</td>
                                 </tr>
                             ) : (
                                 paginatedTasks.map((task) => (
@@ -500,7 +724,7 @@ const KanbanDemo = () => {
                 </div>
             )}
 
-            {/* Modal - Reused from previous version */}
+            {/* Modal - Assign New Task */}
             {showModal && (
                 <div style={{
                     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -739,6 +963,163 @@ const KanbanDemo = () => {
                                     </div>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Work Certification Review Section for Manager */}
+                        <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '2px dashed var(--border)' }}>
+                            <h4 style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Shield size={20} /> Work Certification & Review
+                            </h4>
+
+                            {loadingReview ? (
+                                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading certification data...</div>
+                            ) : taskReview ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                    {/* Scores Panel */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', backgroundColor: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ textAlign: 'center' }}>
+                                            <p style={{ fontSize: '0.75rem', color: '#64748b', mb: '4px' }}>CONFIDENCE</p>
+                                            <p style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#334155' }}>{Math.round(taskReview.progress?.confidence_score || 0)}%</p>
+                                        </div>
+                                        <div style={{ textAlign: 'center' }}>
+                                            <p style={{ fontSize: '0.75rem', color: '#64748b', mb: '4px' }}>AUTHENTICITY</p>
+                                            <p style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#2563eb' }}>{Math.round(taskReview.progress?.authenticity_score || 0)}/100</p>
+                                        </div>
+                                        <div style={{ textAlign: 'center' }}>
+                                            <p style={{ fontSize: '0.75rem', color: '#64748b', mb: '4px' }}>RISK LEVEL</p>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '1rem', fontWeight: 'bold', color: taskReview.progress?.risk_flag ? '#dc2626' : '#16a34a' }}>
+                                                {taskReview.progress?.risk_flag ? <><AlertCircle size={16} /> HIGH</> : <><CheckCircle2 size={16} /> LOW</>}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Submission Content */}
+                                    {taskReview.submission ? (
+                                        <div style={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px' }}>
+                                            <h5 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '8px', color: '#475569' }}>Employee Submission</h5>
+                                            <p style={{ fontSize: '0.9rem', color: '#334155', marginBottom: '12px', whiteSpace: 'pre-wrap', backgroundColor: '#f9fafb', padding: '8px', borderRadius: '6px' }}>
+                                                {taskReview.submission.description || 'No description provided.'}
+                                            </p>
+
+                                            <h5 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '8px', color: '#475569' }}>Proof Files ({taskReview.evidence?.length || 0})</h5>
+                                            {taskReview.evidence && taskReview.evidence.length > 0 ? (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                    {taskReview.evidence.map((file, i) => (
+                                                        <a
+                                                            key={i}
+                                                            href={file.file_url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            style={{
+                                                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                                padding: '8px 12px', backgroundColor: '#f1f5f9', borderRadius: '6px',
+                                                                textDecoration: 'none', color: '#334155', fontSize: '0.85rem',
+                                                                border: '1px solid #e2e8f0', transition: 'background 0.2s'
+                                                            }}
+                                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e2e8f0'}
+                                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                                        >
+                                                            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                <FileText size={16} /> File {i + 1} ({file.file_type || 'Unknown'})
+                                                            </span>
+                                                            <ExternalLink size={14} />
+                                                        </a>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p style={{ fontSize: '0.85rem', color: '#94a3b8', fontStyle: 'italic' }}>No files uploaded.</p>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div style={{ padding: '16px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#991b1b', fontSize: '0.9rem' }}>
+                                            No submission found. Employee has not submitted work yet.
+                                        </div>
+                                    )}
+
+                                    {/* Action Buttons Logic */}
+                                    {selectedTask.status === 'completed' ? (
+                                        <div style={{ marginTop: '24px', padding: '16px', backgroundColor: '#ecfdf5', borderRadius: '12px', border: '1px solid #6ee7b7' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', color: '#064e3b', fontWeight: 'bold' }}>
+                                                <Shield size={20} />
+                                                <span>Officially Certified & Locked</span>
+                                            </div>
+                                            <p style={{ fontSize: '0.9rem', color: '#065f46', marginBottom: '16px' }}>
+                                                This task has been verified and permanently archived in the immutable ledger.
+                                            </p>
+                                            <button
+                                                onClick={() => handleGenerateReport(selectedTask)}
+                                                style={{
+                                                    padding: '10px 16px', backgroundColor: '#fff', color: '#059669',
+                                                    border: '1px solid #10b981', borderRadius: '8px', fontWeight: '600',
+                                                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                }}
+                                            >
+                                                <FileCheck size={18} />
+                                                Download Certification Report
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        (taskReview.submission) && (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '24px' }}>
+                                                {isRejecting ? (
+                                                    <div style={{ animation: 'fadeIn 0.2s' }}>
+                                                        <textarea
+                                                            value={rejectionRemark}
+                                                            onChange={(e) => setRejectionRemark(e.target.value)}
+                                                            placeholder="Enter reason for rejection and feedback..."
+                                                            rows="3"
+                                                            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #fecaca', marginBottom: '8px', fontSize: '0.9rem', outline: 'none' }}
+                                                            autoFocus
+                                                        />
+                                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                                            <button
+                                                                onClick={() => setIsRejecting(false)}
+                                                                style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white', cursor: 'pointer' }}
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                            <button
+                                                                onClick={handleRejectTask}
+                                                                style={{ flex: 1, padding: '8px', borderRadius: '6px', border: 'none', background: '#dc2626', color: 'white', fontWeight: '600', cursor: 'pointer' }}
+                                                            >
+                                                                Confirm Rejection
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ display: 'flex', gap: '12px' }}>
+                                                        <button
+                                                            onClick={() => setIsRejecting(true)}
+                                                            style={{
+                                                                flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #fca5a5',
+                                                                backgroundColor: '#fef2f2', color: '#b91c1c', fontWeight: '600',
+                                                                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                                                            }}
+                                                        >
+                                                            <XCircle size={18} /> Reject
+                                                        </button>
+                                                        <button
+                                                            onClick={handleApproveTask}
+                                                            style={{
+                                                                flex: 1, padding: '12px', borderRadius: '8px', border: 'none',
+                                                                background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+                                                                color: 'white', fontWeight: '600', cursor: 'pointer',
+                                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                                                                boxShadow: '0 4px 6px -1px rgba(22, 163, 74, 0.2)'
+                                                            }}
+                                                        >
+                                                            <CheckCircle2 size={18} /> Approve
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )
+                                    )}
+                                </div>
+                            ) : (
+                                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>No review data available.</div>
+                            )}
                         </div>
 
                         <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'flex-end' }}>

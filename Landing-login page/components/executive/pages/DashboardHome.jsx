@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Users, Clock, Calendar, ChevronRight, MoreHorizontal,
-    CheckCircle2, AlertCircle, Timer, Plus, Star, X
+    CheckCircle2, AlertCircle, Timer, Plus, Star, X,
+    Activity, DollarSign, Target, Zap, TrendingDown, Shield
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { useUser } from '../context/UserContext';
@@ -36,6 +37,7 @@ const DashboardHome = () => {
     const [employeeStats, setEmployeeStats] = useState({ active: 0, away: 0, offline: 0, total: 0 });
     const [teamAnalytics, setTeamAnalytics] = useState([]);
     const [taskStats, setTaskStats] = useState({ pending: 0, inProgress: 0, completed: 0 });
+    const [riskMetrics, setRiskMetrics] = useState(null); // New Risk Radar State
     const [refreshTrigger, setRefreshTrigger] = useState(0);
 
     // Data for Modal
@@ -88,12 +90,15 @@ const DashboardHome = () => {
                     });
                 }
 
-                // Fetch teams for analytics
-                // Fetch tasks for stats and analytics
                 // Fetch tasks for stats and analytics AND timeline
                 const { data: tasks } = await supabase
                     .from('tasks')
-                    .select('id, status, assigned_to, title, due_date, priority');
+                    .select('id, status, assigned_to, title, due_date, priority, team_id'); // Added team_id
+
+                // Fetch Task Progress for Risk Radar
+                const { data: progressData } = await supabase
+                    .from('task_progress')
+                    .select('*');
 
                 if (tasks) {
                     setTaskStats({
@@ -101,6 +106,55 @@ const DashboardHome = () => {
                         inProgress: tasks.filter(t => ['in_progress', 'in progress'].includes(t.status?.toLowerCase())).length,
                         completed: tasks.filter(t => ['completed', 'done'].includes(t.status?.toLowerCase())).length
                     });
+
+                    // --- RISK RADAR CALCULATIONS ---
+                    if (progressData) {
+                        const totalTasks = tasks.length;
+                        const certifiedTasks = progressData.filter(p => p.completion_percent >= 100).length;
+                        const avgCompletion = progressData.reduce((acc, curr) => acc + (curr.completion_percent || 0), 0) / (progressData.length || 1);
+
+                        const highRiskTasks = progressData.filter(p => p.risk_flag);
+                        const highRiskTaskIds = highRiskTasks.map(p => p.task_id);
+
+                        // Calculate Revenue/Cost Exposure based on Priority
+                        // Assumption: High Priority = $5000, Medium = $2000, Low = $500
+                        let totalExposure = 0;
+                        let delayCost = 0;
+
+                        tasks.forEach(t => {
+                            if (highRiskTaskIds.includes(t.id)) {
+                                const value = t.priority === 'high' ? 5000 : t.priority === 'medium' ? 2000 : 500;
+                                totalExposure += value;
+                            }
+
+                            // Simple delay cost: if overdue and not completed, add $1000
+                            if (t.due_date && new Date(t.due_date) < new Date() && !['completed', 'done'].includes(t.status?.toLowerCase())) {
+                                delayCost += 1000;
+                            }
+                        });
+
+                        const complianceIndex = totalTasks > 0 ? 100 - ((highRiskTasks.length / totalTasks) * 100) : 100;
+
+                        // Team Risk Heatmap Data
+                        const teamRiskMap = {};
+                        progressData.forEach(p => {
+                            const task = tasks.find(t => t.id === p.task_id);
+                            if (task && task.team_id) {
+                                if (!teamRiskMap[task.team_id]) teamRiskMap[task.team_id] = { riskCount: 0, total: 0 };
+                                teamRiskMap[task.team_id].total += 1;
+                                if (p.risk_flag) teamRiskMap[task.team_id].riskCount += 1;
+                            }
+                        });
+
+                        setRiskMetrics({
+                            certifiedPct: Math.round(avgCompletion),
+                            highRiskCount: highRiskTasks.length,
+                            revenueExposure: totalExposure,
+                            delayCost: delayCost,
+                            complianceIndex: Math.round(complianceIndex),
+                            teamRisks: teamRiskMap
+                        });
+                    }
                 }
 
                 // Fetch announcements
@@ -402,10 +456,114 @@ const DashboardHome = () => {
                                 </div>
                             </div>
 
-                            {/* Decorative Triangle */}
+                            {/* Recursive Decorative Triangle */}
                             <div style={{ position: 'absolute', bottom: 0, right: 0, width: '0', height: '0', borderStyle: 'solid', borderWidth: '0 0 100px 100px', borderColor: 'transparent transparent rgba(255,255,255,0.3) transparent' }}></div>
                         </div>
                     </div>
+
+                    {/* ORGANIZATION RISK RADAR */}
+                    {riskMetrics && (
+                        <div style={{ backgroundColor: '#fff', borderRadius: '24px', padding: '24px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                                <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <Activity size={24} color="#dc2626" /> Organization Risk Radar
+                                </h3>
+                                <div style={{ padding: '6px 12px', borderRadius: '20px', backgroundColor: '#fee2e2', color: '#dc2626', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                                    REAL-TIME
+                                </div>
+                            </div>
+
+                            {/* 4 Key Metrics */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '32px' }}>
+                                {/* Metric 1: Certified Work */}
+                                <div style={{ padding: '16px', borderRadius: '16px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                        <div style={{ padding: '6px', borderRadius: '8px', backgroundColor: '#dcfce7', color: '#166534' }}><Shield size={16} /></div>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#64748b' }}>CERTIFIED WORK</span>
+                                    </div>
+                                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#1e293b' }}>{riskMetrics.certifiedPct}%</div>
+                                    <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '600' }}>+5% this week</div>
+                                </div>
+
+                                {/* Metric 2: Revenue Risk */}
+                                <div style={{ padding: '16px', borderRadius: '16px', backgroundColor: '#fef2f2', border: '1px solid #fecaca' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                        <div style={{ padding: '6px', borderRadius: '8px', backgroundColor: '#fecaca', color: '#991b1b' }}><DollarSign size={16} /></div>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#7f1d1d' }}>REVENUE RISK</span>
+                                    </div>
+                                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#991b1b' }}>${(riskMetrics.revenueExposure / 1000).toFixed(1)}k</div>
+                                    <div style={{ fontSize: '0.7rem', color: '#7f1d1d', fontWeight: '600' }}>{riskMetrics.highRiskCount} High Risk Tasks</div>
+                                </div>
+
+                                {/* Metric 3: Delay Impact */}
+                                <div style={{ padding: '16px', borderRadius: '16px', backgroundColor: '#fffbeb', border: '1px solid #fde68a' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                        <div style={{ padding: '6px', borderRadius: '8px', backgroundColor: '#fde68a', color: '#92400e' }}><TrendingDown size={16} /></div>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#92400e' }}>DELAY IMPACT</span>
+                                    </div>
+                                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#d97706' }}>${(riskMetrics.delayCost / 1000).toFixed(1)}k</div>
+                                    <div style={{ fontSize: '0.7rem', color: '#d97706', fontWeight: '600' }}>Penalty Value</div>
+                                </div>
+
+                                {/* Metric 4: Compliance Index */}
+                                <div style={{ padding: '16px', borderRadius: '16px', backgroundColor: '#f0f9ff', border: '1px solid #bae6fd' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                        <div style={{ padding: '6px', borderRadius: '8px', backgroundColor: '#bae6fd', color: '#0369a1' }}><Zap size={16} /></div>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#0369a1' }}>HEALTH INDEX</span>
+                                    </div>
+                                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#0284c7' }}>{riskMetrics.complianceIndex}/100</div>
+                                    <div style={{ fontSize: '0.7rem', color: '#0284c7', fontWeight: '600' }}>Overall Scope</div>
+                                </div>
+                            </div>
+
+                            {/* Team-wise Risk Heatmap */}
+                            <div>
+                                <h4 style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#475569', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    Team Risk Heatmap
+                                </h4>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
+                                    {allTeams.map(team => {
+                                        const stats = riskMetrics.teamRisks[team.id] || { riskCount: 0, total: 0 };
+                                        const riskPct = stats.total > 0 ? (stats.riskCount / stats.total) * 100 : 0;
+
+                                        // Heatmap Color Logic
+                                        let bgColor = '#ecfdf5'; // Low Risk (Green)
+                                        let barColor = '#10b981';
+                                        let labelColor = '#065f46';
+
+                                        if (riskPct > 50) {
+                                            bgColor = '#fef2f2'; // High Risk (Red)
+                                            barColor = '#ef4444';
+                                            labelColor = '#991b1b';
+                                        } else if (riskPct > 20) {
+                                            bgColor = '#fffbeb'; // Med Risk (Yellow)
+                                            barColor = '#f59e0b';
+                                            labelColor = '#92400e';
+                                        }
+
+                                        return (
+                                            <div key={team.id} style={{
+                                                padding: '12px', borderRadius: '12px', backgroundColor: bgColor,
+                                                border: '1px solid transparent', display: 'flex', flexDirection: 'column', gap: '8px'
+                                            }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <span style={{ fontWeight: '600', color: labelColor, fontSize: '0.85rem' }}>{team.name}</span>
+                                                    <span style={{ fontWeight: 'bold', color: labelColor, fontSize: '0.9rem' }}>{Math.round(riskPct)}% Risk</span>
+                                                </div>
+                                                {/* Progress Bar */}
+                                                <div style={{ height: '6px', width: '100%', backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
+                                                    <div style={{ height: '100%', width: `${riskPct}%`, backgroundColor: barColor, borderRadius: '3px' }}></div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {allTeams.length === 0 && (
+                                        <div style={{ color: '#94a3b8', fontSize: '0.9rem', fontStyle: 'italic', gridColumn: 'span 3' }}>No team data available for heatmap.</div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Team Analytics Card (Green) - Moved to Bottom, Full Width */}
                     <div style={{ backgroundColor: '#bbf7d0', borderRadius: '24px', padding: '24px', display: 'flex', flexDirection: 'column', minHeight: '200px' }}>

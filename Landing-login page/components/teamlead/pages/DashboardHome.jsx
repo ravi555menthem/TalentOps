@@ -9,6 +9,7 @@ import { useUser } from '../context/UserContext';
 import { supabase } from '../../../lib/supabaseClient';
 
 import AttendanceTracker from '../components/Dashboard/AttendanceTracker';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 
 const DashboardHome = () => {
@@ -61,6 +62,7 @@ const DashboardHome = () => {
     });
 
     const [timeline, setTimeline] = useState([]);
+    const [memberPerformance, setMemberPerformance] = useState([]);
     const [error, setError] = useState(null);
 
     const [allOrgEmployees, setAllOrgEmployees] = useState([]);
@@ -202,6 +204,14 @@ const DashboardHome = () => {
                             inReview: flatTasks.filter(t => t.status === 'pending').length,
                             completed: flatTasks.filter(t => t.status === 'done' || t.status === 'completed').length
                         });
+
+                        // Calculate Member Performance for Bar Chart
+                        const performanceData = members.map((m, i) => ({
+                            name: m.full_name?.split(' ')[0] || m.email?.split('@')[0],
+                            completed: allTasks[i].filter(t => ['done', 'completed'].includes(t.status?.toLowerCase())).length,
+                            active: allTasks[i].filter(t => ['in_progress', 'pending'].includes(t.status?.toLowerCase())).length
+                        }));
+                        setMemberPerformance(performanceData);
 
                         // Fetch Announcements & Update Timeline
                         const { data: eventsData } = await supabase
@@ -460,37 +470,62 @@ const DashboardHome = () => {
                             </div>
                         </div>
 
-                        {/* Task Status Card (Blue) - Moved Here */}
+                        {/* Task Status Card (Blue) - Donut Chart */}
                         <div
                             onClick={() => navigate('/teamlead-dashboard/team-tasks')}
                             style={{
                                 backgroundColor: '#bfdbfe', borderRadius: '24px', padding: '24px',
-                                display: 'flex', flexDirection: 'column', minHeight: '240px',
+                                display: 'flex', flexDirection: 'column', minHeight: '300px',
                                 position: 'relative', overflow: 'hidden', cursor: 'pointer',
                                 transition: 'transform 0.2s'
                             }}
                             onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
                             onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                         >
-                            <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#1e3a8a', marginBottom: '24px' }}>Task Status:</h3>
+                            <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#1e3a8a', marginBottom: '8px' }}>Task Distribution</h3>
 
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <div>
-                                    <span style={{ fontSize: '2rem', fontWeight: 'bold', color: '#fff' }}>{taskStats.inProgress}</span>
-                                    <p style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#1e3a8a', marginTop: '4px' }}>IN PROGRESS</p>
-                                </div>
-                                <div>
-                                    <span style={{ fontSize: '2rem', fontWeight: 'bold', color: '#fff' }}>{taskStats.inReview}</span>
-                                    <p style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#1e3a8a', marginTop: '4px' }}>IN REVIEW</p>
-                                </div>
-                                <div>
-                                    <span style={{ fontSize: '2rem', fontWeight: 'bold', color: '#fff' }}>{taskStats.completed}</span>
-                                    <p style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#1e3a8a', marginTop: '4px' }}>COMPLETED</p>
-                                </div>
+                            <div style={{ flex: 1, minHeight: '200px' }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={[
+                                                { name: 'Progress', value: taskStats.inProgress },
+                                                { name: 'Review', value: taskStats.inReview },
+                                                { name: 'Done', value: taskStats.completed }
+                                            ]}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={60}
+                                            outerRadius={80}
+                                            paddingAngle={5}
+                                            dataKey="value"
+                                        >
+                                            <Cell key="cell-0" fill="#3b82f6" />
+                                            <Cell key="cell-1" fill="#eab308" />
+                                            <Cell key="cell-2" fill="#22c55e" />
+                                        </Pie>
+                                        <Tooltip />
+                                        <Legend verticalAlign="bottom" height={36} />
+                                    </PieChart>
+                                </ResponsiveContainer>
                             </div>
+                        </div>
+                    </div>
 
-                            {/* Decorative Triangle */}
-                            <div style={{ position: 'absolute', bottom: 0, right: 0, width: '0', height: '0', borderStyle: 'solid', borderWidth: '0 0 100px 100px', borderColor: 'transparent transparent rgba(255,255,255,0.3) transparent' }}></div>
+                    {/* Team Performance Bar Chart */}
+                    <div style={{ backgroundColor: '#fff', borderRadius: '24px', padding: '24px', minHeight: '300px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+                        <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#1e293b', marginBottom: '16px' }}>Team Workload & Performance</h3>
+                        <div style={{ width: '100%', height: '240px' }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={memberPerformance} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+                                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                                    <YAxis tick={{ fontSize: 12 }} />
+                                    <Tooltip />
+                                    <Legend />
+                                    <Bar dataKey="active" stackId="a" fill="#3b82f6" name="Active Tasks" />
+                                    <Bar dataKey="completed" stackId="a" fill="#22c55e" name="Completed" />
+                                </BarChart>
+                            </ResponsiveContainer>
                         </div>
                     </div>
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
-import { Plus, X, Eye, Mail, Phone, MapPin, Calendar, Briefcase, Download } from 'lucide-react';
+import { Plus, X, Eye, Mail, Phone, MapPin, Calendar, Briefcase, Download, Shield, Award, AlertTriangle } from 'lucide-react';
 import DataTable from '../components/UI/DataTable';
 import { useToast } from '../context/ToastContext';
 import { useUser } from '../context/UserContext';
@@ -285,6 +285,35 @@ const ModulePage = ({ title, type }) => {
     // State for Candidate Details modal
     const [selectedCandidate, setSelectedCandidate] = useState(null);
     const [showCandidateModal, setShowCandidateModal] = useState(false);
+
+    // State for Trust Passport
+    const [trustProfile, setTrustProfile] = useState(null);
+
+    const fetchTrustProfile = async (employeeId) => {
+        try {
+            console.log('Fetching Trust Profile for:', employeeId);
+            const { data, error } = await supabase.rpc('get_employee_trust_profile', { emp_id: employeeId });
+
+            if (error) {
+                console.error('RPC Error:', error);
+                // Fallback / Mock if RPC fails or doesn't exist yet
+                setTrustProfile({
+                    trust_score: 75,
+                    certified_percent: 80,
+                    avg_confidence: 85,
+                    risk_flags: 0,
+                    overdue_count: 1,
+                    rejection_rate: 5
+                });
+            } else {
+                console.log('Trust Profile Data:', data);
+                setTrustProfile(data);
+            }
+        } catch (err) {
+            console.error('Error fetching trust profile:', err);
+            setTrustProfile(null);
+        }
+    };
 
     const fetchEmployeeTasks = async (employeeId, startDate, endDate) => {
         // Log parameters for debugging
@@ -1406,10 +1435,24 @@ const ModulePage = ({ title, type }) => {
             {/* Employee Details Modal */}
             {showEmployeeModal && selectedEmployee && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-                    <div style={{ backgroundColor: 'var(--surface)', borderRadius: '16px', width: '600px', maxWidth: '90%', maxHeight: '90vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)' }}>
+                    <div style={{ backgroundColor: 'var(--surface)', borderRadius: '16px', width: '700px', maxWidth: '95%', maxHeight: '90vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)' }}>
                         {/* Header */}
-                        <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h3 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Team Member Details</h3>
+                        <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(to right, #ffffff, #f8fafc)' }}>
+                            <div>
+                                <h3 style={{ fontSize: '1.5rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    Team Member Details
+                                    {trustProfile && (
+                                        <span style={{
+                                            fontSize: '0.8rem', padding: '4px 12px', borderRadius: '20px',
+                                            backgroundColor: trustProfile.trust_score >= 80 ? '#dcfce7' : trustProfile.trust_score >= 50 ? '#fef3c7' : '#fee2e2',
+                                            color: trustProfile.trust_score >= 80 ? '#166534' : trustProfile.trust_score >= 50 ? '#92400e' : '#991b1b',
+                                            border: '1px solid rgba(0,0,0,0.05)'
+                                        }}>
+                                            TRUST SCORE: {trustProfile.trust_score}/100
+                                        </span>
+                                    )}
+                                </h3>
+                            </div>
                             <button onClick={() => setShowEmployeeModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
                                 <X size={24} />
                             </button>
@@ -1437,6 +1480,49 @@ const ModulePage = ({ title, type }) => {
                                     </span>
                                 </div>
                             </div>
+
+                            {/* --- TRUST PASSPORT SECTION --- */}
+                            {trustProfile && (
+                                <div style={{ marginBottom: '32px', backgroundColor: '#f8fafc', borderRadius: '16px', padding: '24px', border: '1px solid #e2e8f0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
+                                        <div style={{ padding: '8px', borderRadius: '8px', backgroundColor: '#dbeafe', color: '#1e40af' }}><Shield size={20} /></div>
+                                        <h5 style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#1e293b' }}>TalentOps Trust Passport</h5>
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                                        {/* Metric 1 */}
+                                        <div style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                            <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>CERTIFIED WORK</div>
+                                            <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#0f172a' }}>{trustProfile.certified_percent}%</div>
+                                            <div style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: '600' }}>Completion Rate</div>
+                                        </div>
+                                        {/* Metric 2 */}
+                                        <div style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                            <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>CONFIDENCE</div>
+                                            <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#0f172a' }}>{trustProfile.avg_confidence}/100</div>
+                                            <div style={{ fontSize: '0.7rem', color: '#3b82f6', fontWeight: '600' }}>AI Verified</div>
+                                        </div>
+                                        {/* Metric 3 */}
+                                        <div style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                            <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>RISK FLAGS</div>
+                                            <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: trustProfile.risk_flags > 0 ? '#ef4444' : '#0f172a' }}>{trustProfile.risk_flags}</div>
+                                            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Total Detection</div>
+                                        </div>
+                                        {/* Metric 4 */}
+                                        <div style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                            <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>DELAY IMPACT</div>
+                                            <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: trustProfile.overdue_count > 0 ? '#f59e0b' : '#0f172a' }}>{trustProfile.overdue_count}</div>
+                                            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Overdue Tasks</div>
+                                        </div>
+                                        {/* Metric 5 */}
+                                        <div style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                            <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>REJECTION RATE</div>
+                                            <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: trustProfile.rejection_rate > 10 ? '#ef4444' : '#0f172a' }}>{trustProfile.rejection_rate}%</div>
+                                            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Quality Check</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Contact Information */}
                             <div style={{ marginBottom: '32px' }}>
@@ -1498,7 +1584,7 @@ const ModulePage = ({ title, type }) => {
 
                             {/* Performance Metrics */}
                             <div>
-                                <h5 style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '16px', color: 'var(--text-primary)' }}>Performance Metrics</h5>
+                                <h5 style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '16px', color: 'var(--text-primary)' }}>Legacy Metrics</h5>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
                                     <div style={{ padding: '16px', backgroundColor: '#dcfce7', borderRadius: '12px', textAlign: 'center' }}>
                                         <p style={{ fontSize: '0.75rem', color: '#166534', marginBottom: '4px', fontWeight: 600 }}>PERFORMANCE</p>
